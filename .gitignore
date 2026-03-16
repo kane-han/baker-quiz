@@ -2,3 +2,9 @@ node_modules/
 .DS_Store
 Thumbs.db
 *.log
+
+# 개발용 (배포 불필요)
+data/
+originals/
+build-*.js
+PROMPT.md

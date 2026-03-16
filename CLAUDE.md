@@ -16,17 +16,17 @@
 - 제빵기능사 모의고사 21개 시험 (원본 1회 + 2007~2011년 20회차, 각 60문제)
 - 제과기능사 모의고사 21개 시험 (원본 1회 + 2007~2011년 20회차, 각 60문제)
 - 총 2,520문제 (42개 시험 × 60문제)
+- 2,423문제에 AI 생성 해설 포함 (원본 2회는 전문가 해설)
 - 카테고리(제빵/제과) → 회차 선택 → 시험 UI 흐름
 - 1문제씩 보기 / 전체 보기 전환
 - 자동 채점 (60점 합격 기준)
 - 오답 노트 (오답만 필터, 전체 보기)
-- 원본 1회 시험만 상세 해설 포함 (기출문제는 문제/정답만)
 - 모바일 최적화 UI
 
 ## 파일 구조
 ```
 baker-quiz/
-├── index.html          # 메인 앱 (HTML/CSS/JS 통합, 554KB, 2520문제)
+├── index.html          # 메인 앱 (HTML/CSS/JS 통합, 945KB, 2520문제+해설)
 ├── data/               # 기출문제 원본 JSON (빌드용, 배포 불필요)
 ├── originals/          # 원본 시험 문제 이미지 (20장)
 ├── build-*.js          # 데이터 빌드 스크립트 (개발용)
@@ -55,7 +55,7 @@ baker-quiz/
 
 ## 배포 방법
 ```bash
-# GitHub Pages로 배포 (이미 설정됨)
-git add . && git commit -m "update" && git push
+# GitHub Pages로 배포 (main 브랜치에서 배포)
+git add . && git commit -m "update" && git push origin main
 # 1~2분 후 https://kane-han.github.io/baker-quiz/ 에 반영
 ```
