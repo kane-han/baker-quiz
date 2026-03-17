@@ -2682,7 +2682,7 @@ cake: [{
 // ========== APP STATE ==========
 let state = { screen:'home', cat:null, idx:0, answers:[], current:0, submitted:false, viewMode:'single' };
 const app = document.getElementById('app');
-function getExam() { return state.chapterExam || EXAMS[state.cat][state.idx]; }
+function getExam() { return state.chapterExam || state.weakExam || EXAMS[state.cat][state.idx]; }
 const CAT_INFO = { bread:{emoji:'🍞',name:'제빵기능사'}, cake:{emoji:'🍰',name:'제과기능사'} };
 const CH_INFO = {
   ingredients:{emoji:'🌾',name:'재료과학',desc:'밀가루, 설탕, 유지, 계란, 이스트 등'},
@@ -2717,6 +2717,82 @@ function saveResult() {
   history.push(record);
   localStorage.setItem('baker-quiz-history',JSON.stringify(history));
 }
+// ========== 풀이 기록 (문제 단위) ==========
+function getLog() { return JSON.parse(localStorage.getItem('baker-quiz-log')||'[]'); }
+function saveLog(log) { localStorage.setItem('baker-quiz-log',JSON.stringify(log)); }
+function makeQid(cat, examIdx, qIdx) { return cat[0]+'-'+examIdx+'-'+qIdx; }
+function makeQidFromText(q) { return 'h-'+q.substring(0,20).replace(/[^가-힣a-zA-Z0-9]/g,''); }
+function logAnswers() {
+  const exam=getExam(), today=new Date().toISOString().slice(0,10), log=getLog();
+  exam.questions.forEach((q,i)=>{
+    if(state.answers[i]===-1)return;
+    let qid;
+    if(state.chapterMode||state.weakMode) { qid=makeQidFromText(q.q); }
+    else { qid=makeQid(state.cat,state.idx,i); }
+    log.push({id:qid,c:q.c||'manufacturing',picked:state.answers[i],correct:state.answers[i]===q.a,date:today});
+  });
+  saveLog(log);
+}
+function getQStats() {
+  const log=getLog(), stats={};
+  log.forEach(r=>{
+    if(!stats[r.id])stats[r.id]={id:r.id,c:r.c,right:0,wrong:0,lastWrongDate:null,lastPicked:null};
+    const s=stats[r.id];
+    if(r.correct)s.right++;
+    else{s.wrong++;s.lastWrongDate=r.date;s.lastPicked=r.picked;}
+  });
+  return stats;
+}
+function getChapterStats(cat) {
+  const log=getLog(), chapters={};
+  const catPrefix=cat[0]+'-';
+  log.forEach(r=>{
+    if(!r.id.startsWith(catPrefix)&&!r.id.startsWith('h-'))return;
+    const ch=r.c||'manufacturing';
+    if(!chapters[ch])chapters[ch]={right:0,wrong:0,total:0};
+    chapters[ch].total++;
+    if(r.correct)chapters[ch].right++;else chapters[ch].wrong++;
+  });
+  return chapters;
+}
+function getWeakestChapter(cat) {
+  const stats=getChapterStats(cat);
+  let worst=null,worstRate=101;
+  for(const[ch,s]of Object.entries(stats)){
+    if(s.total<5)continue;
+    const rate=Math.round(s.right/s.total*100);
+    if(rate<worstRate){worstRate=rate;worst={chapter:ch,rate};}
+  }
+  return worst;
+}
+function getWeakQuestions(cat) {
+  const stats=getQStats(), weak=[];
+  for(const[id,s]of Object.entries(stats)){
+    if(!id.startsWith(cat[0]+'-')&&!id.startsWith('h-'))continue;
+    const weight=s.wrong-(s.right*0.5);
+    if(weight>0)weak.push({...s,weight});
+  }
+  weak.sort((a,b)=>b.weight-a.weight);
+  return weak;
+}
+function findQuestionById(qid) {
+  if(qid.startsWith('h-')){
+    const hash=qid.substring(2);
+    for(const cat of['bread','cake']){
+      for(const exam of EXAMS[cat]){
+        for(const q of exam.questions){
+          if(q.q.substring(0,20).replace(/[^가-힣a-zA-Z0-9]/g,'')===hash)return q;
+        }
+      }
+    }
+  } else {
+    const[c,ei,qi]=qid.split('-');
+    const cat=c==='b'?'bread':'cake';
+    if(EXAMS[cat][+ei]&&EXAMS[cat][+ei].questions[+qi])return EXAMS[cat][+ei].questions[+qi];
+  }
+  return null;
+}
+
 function getBestScore(cat,idx) {
   const records=getHistory().filter(r=>r.cat===cat&&r.idx===idx);
   if(!records.length)return null;
@@ -2735,6 +2811,7 @@ function render() {
     case 'quiz': renderQuiz(); break;
     case 'result': renderResult(); break;
     case 'review': renderReview(); break;
+    case 'analytics': renderAnalytics(); break;
   }
 }
 
@@ -2757,6 +2834,24 @@ function renderHome() {
       <div class="title">${c.name}</div>
       <div class="desc">${n}개 시험 · 60문제 · 4지선다</div>
     </div>`;}).join('')}
+    ${(()=>{
+      const log=getLog();
+      if(!log.length)return '';
+      const bw=getWeakestChapter('bread'),cw=getWeakestChapter('cake');
+      const weak=bw&&cw?(bw.rate<cw.rate?{...bw,cat:'bread'}:{...cw,cat:'cake'}):bw?{...bw,cat:'bread'}:cw?{...cw,cat:'cake'}:null;
+      const weakAll=getWeakQuestions('bread').length+getWeakQuestions('cake').length;
+      return `
+      <div class="home-card" onclick="state.screen='analytics';render()" style="border-color:var(--wrong);border-width:1px;background:#FFFBEB">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="font-size:32px">📊</div>
+          <div style="flex:1">
+            <div class="title">학습 분석</div>
+            ${weak?`<div class="desc" style="color:var(--wrong);font-weight:600">⚠️ ${CH_INFO[weak.chapter].name}이(가) 가장 약해요 (정답률 ${weak.rate}%)</div>`:''}
+            ${weakAll>0?`<div class="desc">취약 문제 ${weakAll}개 복습 가능</div>`:`<div class="desc">풀이 기록을 분석해보세요</div>`}
+          </div>
+        </div>
+      </div>`;
+    })()}
     <div style="margin:20px 0 8px;font-size:14px;font-weight:600;color:var(--sub)">챕터별 학습</div>
     ${['bread','cake'].map(k=>{const c=CAT_INFO[k];return`
     <div class="home-card" onclick="showChapterCat('${k}')" style="border-color:var(--primary);border-width:1px">
@@ -2871,11 +2966,11 @@ function sel(qi,oi) { state.answers[qi]=oi; render(); }
 function prevQ() { if(state.current>0){state.current--;render();window.scrollTo(0,0);} }
 function nextQ() { if(state.current<getExam().questions.length-1){state.current++;render();window.scrollTo(0,0);} }
 function toggleView() { state.viewMode=state.viewMode==='single'?'all':'single'; render(); window.scrollTo(0,0); }
-function goBack() { if(state.answers.some(a=>a!==-1)&&!state.submitted){if(!confirm('시험을 종료하시겠습니까?'))return;} state.screen=state.chapterMode?'chapterCat':'exams'; state.chapterExam=null; render(); }
+function goBack() { if(state.answers.some(a=>a!==-1)&&!state.submitted){if(!confirm('시험을 종료하시겠습니까?'))return;} state.screen=state.weakMode?'analytics':state.chapterMode?'chapterCat':'exams'; state.chapterExam=null; render(); }
 function submit() {
   const u=state.answers.filter(a=>a===-1).length;
   if(u>0&&!confirm(`아직 ${u}문제를 풀지 않았습니다.\n그래도 채점하시겠습니까?`))return;
-  state.submitted=true; saveResult(); state.screen='result'; render(); window.scrollTo(0,0);
+  state.submitted=true; logAnswers(); saveResult(); state.screen='result'; render(); window.scrollTo(0,0);
 }
 
 function renderResult() {
@@ -2884,7 +2979,7 @@ function renderResult() {
   state.answers.forEach((a,i)=>{if(a===-1)skipped++;else if(a===exam.questions[i].a)correct++;else wrong++;});
   const score=Math.round((correct/total)*100), pass=score>=60;
   app.innerHTML = `
-    <div class="top-nav"><button class="back-btn" onclick="state.screen='${state.chapterMode?'chapterCat':'exams'}';render()">←</button><div style="flex:1;text-align:center;font-weight:600;font-size:14px">채점 결과</div></div>
+    <div class="top-nav"><button class="back-btn" onclick="state.screen='${state.weakMode?'analytics':state.chapterMode?'chapterCat':'exams'}';render()">←</button><div style="flex:1;text-align:center;font-weight:600;font-size:14px">채점 결과</div></div>
     <div class="result-card">
       <div style="font-size:15px;font-weight:600;margin-bottom:16px">${catName} ${exam.title}</div>
       <div class="score-circle ${pass?'pass':'fail'}">${score}<small>점</small></div>
@@ -2898,8 +2993,8 @@ function renderResult() {
     </div>
     <button class="btn btn-primary" onclick="showReview('wrong')">오답 확인하기</button>
     <button class="btn btn-outline" onclick="showReview('all')">전체 문제 확인</button>
-    ${state.chapterMode?`<button class="btn btn-outline" onclick="startChapterQuiz('${state.chapter}')">다시 풀기 (새 랜덤)</button>`:`<button class="btn btn-outline" onclick="startExam(${state.idx})">다시 풀기</button>`}
-    <button class="btn btn-outline" onclick="state.screen='${state.chapterMode?'chapterCat':'exams'}';render()">${state.chapterMode?'챕터 목록':'시험 목록'}</button>
+    ${state.weakMode?`<button class="btn btn-outline" onclick="startWeakQuiz()">다시 풀기 (새 랜덤)</button>`:state.chapterMode?`<button class="btn btn-outline" onclick="startChapterQuiz('${state.chapter}')">다시 풀기 (새 랜덤)</button>`:`<button class="btn btn-outline" onclick="startExam(${state.idx})">다시 풀기</button>`}
+    <button class="btn btn-outline" onclick="state.screen='${state.weakMode?'analytics':state.chapterMode?'chapterCat':'exams'}';render()">${state.weakMode?'학습 분석':state.chapterMode?'챕터 목록':'시험 목록'}</button>
     <button class="btn btn-outline" onclick="state.screen='home';render()">홈으로</button>
     <div style="height:20px"></div>`;
 }
@@ -2936,6 +3031,81 @@ function renderReview() {
 }
 
 function scrollR(i) { const el=document.getElementById('rq'+i); if(el)el.scrollIntoView({behavior:'smooth',block:'center'}); }
+
+// ========== 학습 분석 화면 ==========
+function renderAnalytics() {
+  const log=getLog();
+  if(!log.length){
+    app.innerHTML=`<div class="top-nav"><button class="back-btn" onclick="state.screen='home';render()">←</button><div style="flex:1;text-align:center;font-weight:600;font-size:14px">학습 분석</div></div>
+    <div class="result-card"><div style="font-size:48px;margin-bottom:16px">📊</div><div style="font-size:16px;font-weight:600">아직 풀이 기록이 없어요</div><div style="font-size:14px;color:var(--sub);margin-top:8px">시험을 풀면 학습 분석이 시작됩니다</div></div>`;
+    return;
+  }
+  const chKeys=['ingredients','manufacturing','nutrition','hygiene','management'];
+  const L=['①','②','③','④'];
+  let chaptersHtml='';
+  for(const cat of['bread','cake']){
+    const cs=getChapterStats(cat), ci=CAT_INFO[cat];
+    const hasData=Object.values(cs).some(s=>s.total>0);
+    if(!hasData)continue;
+    chaptersHtml+=`<div style="font-size:14px;font-weight:700;margin:16px 0 8px">${ci.emoji} ${ci.name}</div>`;
+    for(const ch of chKeys){
+      const s=cs[ch]||{right:0,wrong:0,total:0};
+      if(!s.total)continue;
+      const rate=Math.round(s.right/s.total*100);
+      const info=CH_INFO[ch];
+      const color=rate>=80?'var(--correct)':rate>=60?'var(--primary)':'var(--wrong)';
+      chaptersHtml+=`<div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span>${info.emoji} ${info.name}</span><span style="font-weight:700;color:${color}">${rate}% <span style="font-weight:400;color:var(--sub)">(${s.right}/${s.total})</span></span></div>
+        <div style="background:var(--border);border-radius:6px;height:8px;overflow:hidden"><div style="background:${color};height:100%;width:${rate}%;border-radius:6px;transition:width .3s"></div></div>
+      </div>`;
+    }
+  }
+  // 오답 TOP 10
+  const allWeak=[...getWeakQuestions('bread'),...getWeakQuestions('cake')];
+  allWeak.sort((a,b)=>b.weight-a.weight);
+  const top10=allWeak.slice(0,10);
+  let weakHtml='';
+  if(top10.length){
+    weakHtml=`<div style="font-size:14px;font-weight:700;margin:20px 0 8px">자주 틀리는 문제 TOP ${top10.length}</div>`;
+    top10.forEach((s,i)=>{
+      const q=findQuestionById(s.id);
+      if(!q)return;
+      weakHtml+=`<div class="q-card" style="padding:14px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span class="q-num" style="color:var(--wrong)">#${i+1}</span>
+          <span style="font-size:12px;color:var(--sub)">${s.wrong}회 오답 · ${s.right}회 정답</span>
+        </div>
+        <div style="font-size:13px;line-height:1.5;color:var(--text)">${q.q.length>60?q.q.substring(0,60)+'...':q.q}</div>
+        ${s.lastPicked!==null?`<div style="font-size:12px;color:var(--wrong);margin-top:4px">마지막 오답: ${L[s.lastPicked]} ${q.o[s.lastPicked]||''}</div>`:''}
+        <div style="font-size:12px;color:var(--correct);margin-top:2px">정답: ${L[q.a]} ${q.o[q.a]}</div>
+      </div>`;
+    });
+  }
+  // 취약 복습 버튼
+  const weakCount=allWeak.length;
+  const weakBtn=weakCount>0?`<button class="btn btn-primary" onclick="startWeakQuiz()" style="margin-top:16px">🔄 취약 문제 복습 (${Math.min(weakCount,20)}문제)</button>`:'';
+  app.innerHTML=`
+    <div class="top-nav"><button class="back-btn" onclick="state.screen='home';render()">←</button><div style="flex:1;text-align:center;font-weight:600;font-size:14px">📊 학습 분석</div></div>
+    <div class="result-card" style="padding:16px;text-align:left">
+      <div style="text-align:center;margin-bottom:12px;font-size:13px;color:var(--sub)">총 ${log.length}문제 풀이 · 정답률 ${Math.round(log.filter(r=>r.correct).length/log.length*100)}%</div>
+      ${chaptersHtml}
+    </div>
+    ${weakHtml}
+    ${weakBtn}
+    <button class="btn btn-outline" onclick="if(confirm('풀이 기록을 초기화할까요?')){localStorage.removeItem('baker-quiz-log');state.screen='home';render()}" style="margin-top:10px;font-size:13px;color:var(--sub)">풀이 기록 초기화</button>
+    <div style="height:20px"></div>`;
+}
+
+function startWeakQuiz() {
+  const allWeak=[...getWeakQuestions('bread'),...getWeakQuestions('cake')];
+  allWeak.sort((a,b)=>b.weight-a.weight);
+  const pool=allWeak.slice(0,Math.max(allWeak.length,40));
+  const selected=shuffleArray(pool).slice(0,20);
+  const questions=selected.map(s=>findQuestionById(s.id)).filter(Boolean);
+  if(!questions.length){alert('복습할 문제가 없습니다.');return;}
+  state={screen:'quiz',cat:'bread',idx:0,answers:new Array(questions.length).fill(-1),current:0,submitted:false,viewMode:'single',chapterExam:{title:'취약 문제 복습',desc:`가중치 기반 ${questions.length}문제`,questions},chapterMode:false,weakMode:true};
+  render();
+}
 
 render();
 </script>
