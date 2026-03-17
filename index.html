@@ -2926,15 +2926,30 @@ function onTimerSelected(v) {
   state.screen='quiz';
   render();
 }
+function onCustomTimer() {
+  const el=document.getElementById('custom-min');
+  const v=parseInt(el.value);
+  if(!v||v<1||v>180){el.style.borderColor='var(--wrong)';return;}
+  onTimerSelected(v*60);
+}
 function showTimerSelect(isShort) {
-  const opts=isShort?[{l:'15분',v:900},{l:'20분',v:1200},{l:'30분',v:1800},{l:'없음',v:0}]:[{l:'30분',v:1800},{l:'45분',v:2700},{l:'60분',v:3600},{l:'없음',v:0}];
+  const presets=isShort?[{l:'15분',v:900},{l:'20분',v:1200},{l:'30분',v:1800}]:[{l:'30분',v:1800},{l:'45분',v:2700},{l:'60분',v:3600}];
   app.innerHTML=`
-    <div style="display:flex;align-items:center;justify-content:center;min-height:60vh">
-      <div style="text-align:center;width:100%;max-width:320px">
-        <div style="font-size:48px;margin-bottom:16px">⏱</div>
-        <div style="font-size:18px;font-weight:700;margin-bottom:8px">타이머 설정</div>
-        <div style="font-size:14px;color:var(--sub);margin-bottom:24px">시간을 선택하세요</div>
-        ${opts.map(o=>`<button class="btn ${o.v?'btn-outline':'btn-primary'}" style="margin-bottom:10px" onclick="onTimerSelected(${o.v})">${o.l}</button>`).join('')}
+    <div style="display:flex;align-items:center;justify-content:center;min-height:70vh">
+      <div style="text-align:center;width:100%;max-width:320px;padding:0 16px">
+        <div style="font-size:48px;margin-bottom:12px">⏱</div>
+        <div style="font-size:18px;font-weight:700;margin-bottom:20px">타이머 설정</div>
+        <div style="display:flex;gap:8px;margin-bottom:16px">
+          ${presets.map(o=>`<button class="btn btn-outline" style="flex:1;padding:14px 0;font-size:15px" onclick="onTimerSelected(${o.v})">${o.l}</button>`).join('')}
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
+          <div style="flex:1;display:flex;align-items:center;border:2px solid var(--border);border-radius:12px;padding:4px 12px;background:var(--card)">
+            <input id="custom-min" type="number" min="1" max="180" placeholder="직접 입력" style="flex:1;border:none;outline:none;font-size:15px;padding:10px 0;background:transparent;width:60px;color:var(--text)" onkeydown="if(event.key==='Enter')onCustomTimer()">
+            <span style="font-size:14px;color:var(--sub);white-space:nowrap">분</span>
+          </div>
+          <button class="btn btn-primary" style="padding:14px 20px;white-space:nowrap" onclick="onCustomTimer()">시작</button>
+        </div>
+        <button class="btn" style="color:var(--sub);font-size:14px;padding:12px" onclick="onTimerSelected(0)">타이머 없이 시작</button>
       </div>
     </div>`;
 }
