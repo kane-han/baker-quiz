@@ -1,0 +1,58 @@
+name: AI PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get PR diff
+        id: diff
+        run: |
+          DIFF=$(git diff origin/${{ github.event.pull_request.base.ref }}...HEAD -- . ':!package-lock.json' ':!*.lock' | head -c 50000)
+          echo "diff<<DIFF_EOF" >> $GITHUB_OUTPUT
+          echo "$DIFF" >> $GITHUB_OUTPUT
+          echo "DIFF_EOF" >> $GITHUB_OUTPUT
+
+      - name: AI Review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          REVIEW=$(curl -s https://api.anthropic.com/v1/messages \
+            -H "content-type: application/json" \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -d "$(jq -n \
+              --arg diff "${{ steps.diff.outputs.diff }}" \
+              --arg title "$PR_TITLE" \
+              --arg body "$PR_BODY" \
+              '{
+                model: "claude-haiku-4-5-20251001",
+                max_tokens: 2048,
+                messages: [{
+                  role: "user",
+                  content: ("You are a code reviewer. Review this PR and provide feedback in Korean.\n\nRules:\n- Be concise and actionable\n- Focus on: bugs, security issues, performance, readability\n- Skip nitpicks (formatting, naming style)\n- If the code looks good, say so briefly\n- Use emoji sparingly: 🐛 bug, 🔒 security, ⚡ performance, 💡 suggestion\n\nPR Title: " + $title + "\nPR Description: " + ($body // "없음") + "\n\nDiff:\n```\n" + $diff + "\n```")
+                }]
+              }')" | jq -r '.content[0].text')
+
+          gh pr comment "$PR_NUMBER" --body "## 🤖 AI Code Review
+
+          $REVIEW
+
+          ---
+          *Powered by Claude Haiku · 자동 생성된 리뷰입니다*"
