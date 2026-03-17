@@ -8,3 +8,6 @@ data/
 originals/
 build-*.js
 PROMPT.md
+
+# PR 스크린샷 (CI에서 생성)
+.github/screenshots/
