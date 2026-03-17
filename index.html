@@ -2577,6 +2577,30 @@ function shuffleArray(arr) {
 }
 
 // ========== LOCAL STORAGE ==========
+// 마이그레이션: 2007년 1회(구 idx=2) 삭제로 인한 인덱스 보정
+(function migrateStorage() {
+  if(localStorage.getItem('baker-quiz-migrated-v2')) return;
+  // history: idx=2 삭제, idx>2는 idx-1로 조정
+  const h = JSON.parse(localStorage.getItem('baker-quiz-history')||'[]');
+  const newH = h.filter(r => r.idx !== 2).map(r => ({...r, idx: r.idx > 2 ? r.idx - 1 : r.idx}));
+  if(h.length) localStorage.setItem('baker-quiz-history', JSON.stringify(newH));
+  // log: qid 형식 "b-2-N" 또는 "c-2-N" 삭제, idx>2는 조정
+  const log = JSON.parse(localStorage.getItem('baker-quiz-log')||'[]');
+  const newLog = log.filter(r => {
+    if(!r.id || r.id.startsWith('h-')) return true;
+    const parts = r.id.split('-');
+    return !(parts.length === 3 && parseInt(parts[1]) === 2);
+  }).map(r => {
+    if(!r.id || r.id.startsWith('h-')) return r;
+    const parts = r.id.split('-');
+    if(parts.length === 3 && parseInt(parts[1]) > 2) {
+      return {...r, id: parts[0]+'-'+(parseInt(parts[1])-1)+'-'+parts[2]};
+    }
+    return r;
+  });
+  if(log.length) localStorage.setItem('baker-quiz-log', JSON.stringify(newLog));
+  localStorage.setItem('baker-quiz-migrated-v2', '1');
+})();
 function getHistory() { return JSON.parse(localStorage.getItem('baker-quiz-history')||'[]'); }
 function saveResult() {
   const exam=getExam(), total=exam.questions.length;
