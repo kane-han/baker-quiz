@@ -75,10 +75,10 @@ function main() {
 
   let matched = 0;
   let replaced = 0;
-  let answerMismatch = 0;
+  let answerChanged = 0;
   let noExplanation = 0;
   let totalQ = 0;
-  const mismatches = [];
+  const changes = [];
 
   html = html.replace(qPattern, (match, qStr, oStr, aStr, rStr, cStr) => {
     totalQ++;
@@ -87,9 +87,9 @@ function main() {
     const currentAnswer = parseInt(aStr);
     const currentR = parseInt(rStr);
 
-    const comcbt = comcbtLookup.get(key);
+    let comcbtMatch = comcbtLookup.get(key);
 
-    if (!comcbt) {
+    if (!comcbtMatch) {
       // 정확 매칭 실패 → 부분 매칭 시도 (처음 20자)
       const shortKey = key.substring(0, 20);
       let bestMatch = null;
@@ -106,49 +106,36 @@ function main() {
       }
 
       if (bestMatch && bestSim >= 0.8) {
-        matched++;
-        if (bestMatch.a !== currentAnswer) {
-          answerMismatch++;
-          mismatches.push({
-            q: qText.substring(0, 40),
-            indexA: currentAnswer,
-            comcbtA: bestMatch.a,
-            examId: bestMatch.examId,
-            qNum: bestMatch.qNum
-          });
-          return match; // 정답 불일치 → 교체하지 않음
-        }
-        replaced++;
-        const eStr = JSON.stringify(bestMatch.e);
-        return `{q:${qStr},o:[${oStr}],a:${aStr},e:${eStr},r:99,c:${cStr}}`;
+        comcbtMatch = bestMatch;
+      } else {
+        return match; // 매칭 실패 → 기존 유지
       }
-
-      return match; // 매칭 실패 → 기존 유지
     }
 
     matched++;
 
-    // 정답 일치 확인
-    if (comcbt.a !== currentAnswer) {
-      answerMismatch++;
-      mismatches.push({
-        q: qText.substring(0, 40),
-        indexA: currentAnswer,
-        comcbtA: comcbt.a,
-        examId: comcbt.examId,
-        qNum: comcbt.qNum
-      });
-      return match; // 정답 불일치 → 교체하지 않음 (안전)
-    }
-
-    if (!comcbt.e) {
+    if (!comcbtMatch.e) {
       noExplanation++;
       return match; // comcbt에 해설 없음 → 기존 유지
     }
 
+    // 정답+해설 모두 comcbt 데이터로 교체
+    const newAnswer = comcbtMatch.a;
+    const eStr = JSON.stringify(comcbtMatch.e);
+
+    if (newAnswer !== currentAnswer) {
+      answerChanged++;
+      changes.push({
+        q: qText.substring(0, 40),
+        oldA: currentAnswer,
+        newA: newAnswer,
+        examId: comcbtMatch.examId,
+        qNum: comcbtMatch.qNum
+      });
+    }
+
     replaced++;
-    const eStr = JSON.stringify(comcbt.e);
-    return `{q:${qStr},o:[${oStr}],a:${aStr},e:${eStr},r:99,c:${cStr}}`;
+    return `{q:${qStr},o:[${oStr}],a:${newAnswer},e:${eStr},r:99,c:${cStr}}`;
   });
 
   // 5. 저장
@@ -168,20 +155,20 @@ function main() {
   console.log('\n=== 교체 결과 ===');
   console.log(`전체 문제: ${totalQ}`);
   console.log(`매칭 성공: ${matched} (${(matched/totalQ*100).toFixed(1)}%)`);
-  console.log(`해설 교체: ${replaced} (r:99로 업데이트)`);
-  console.log(`정답 불일치: ${answerMismatch} (교체 건너뜀)`);
+  console.log(`해설+정답 교체: ${replaced} (r:99로 업데이트)`);
+  console.log(`정답 변경: ${answerChanged}건`);
   console.log(`comcbt 해설 없음: ${noExplanation}`);
   console.log(`\n최종 r:99 문제: ${r99Count}/${totalQCount}`);
   console.log(`파일 크기: ${(fileSize / 1024).toFixed(1)} KB`);
   console.log(`JS 문법: ${syntaxOk ? 'OK' : 'ERROR'}`);
 
-  if (mismatches.length > 0) {
-    console.log(`\n=== 정답 불일치 목록 (${mismatches.length}건) ===`);
-    for (const m of mismatches.slice(0, 20)) {
-      console.log(`  [${m.examId}/${m.qNum}] "${m.q}..." index:${m.indexA} vs comcbt:${m.comcbtA}`);
+  if (changes.length > 0) {
+    console.log(`\n=== 정답 변경 목록 (${changes.length}건) ===`);
+    for (const m of changes.slice(0, 30)) {
+      console.log(`  [${m.examId}/Q${m.qNum}] "${m.q}..." ${m.oldA+1}번→${m.newA+1}번`);
     }
-    if (mismatches.length > 20) {
-      console.log(`  ... 외 ${mismatches.length - 20}건`);
+    if (changes.length > 30) {
+      console.log(`  ... 외 ${changes.length - 30}건`);
     }
   }
 
@@ -191,12 +178,12 @@ function main() {
     total: totalQ,
     matched,
     replaced,
-    answerMismatch,
+    answerChanged,
     noExplanation,
     r99Count,
     totalQCount,
     syntaxOk,
-    mismatches
+    changes
   };
   fs.writeFileSync(path.join(baseDir, 'data', 'update-report.json'), JSON.stringify(report, null, 2), 'utf8');
   console.log('\n리포트 저장: data/update-report.json');
