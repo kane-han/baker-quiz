@@ -3002,7 +3002,7 @@ function renderAllQ(exam,total,answered) {
  <div class="btn-group"><div class="container"><button class="btn btn-primary" onclick="submit()">채점하기 (${answered}/${total})</button></div></div>`;
 }
 
-function sel(qi,oi) { state.answers[qi]=oi; render(); }
+function sel(qi,oi) { state.answers[qi]=state.answers[qi]===oi?-1:oi; render(); }
 function prevQ() { if(state.current>0){state.current--;render();window.scrollTo(0,0);} }
 function nextQ() { if(state.current<getExam().questions.length-1){state.current++;render();window.scrollTo(0,0);} }
 function toggleView() { state.viewMode=state.viewMode==='single'?'all':'single'; render(); window.scrollTo(0,0); }
