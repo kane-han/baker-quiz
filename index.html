@@ -2609,6 +2609,22 @@ function getChapterQuestions(cat, ch) {
  EXAMS[cat].forEach(exam => exam.questions.forEach(q => { if(q.c===ch) qs.push(q); }));
  return qs;
 }
+function isCalcQuestion(q) {
+ const p=/\d+\s*(g|kg|%|℃|°C|cc|kcal|cal|원|만원|포대|개|시간|분|초|L|ml|ppm)/i;
+ const hasCalcQ=p.test(q.q)||/얼마|몇\s*(g|kg|시간|분|개|포대|℃|°C|%|원|만원)|배합률|비중|비용적|손실|수율|칼로리|열량/.test(q.q);
+ const numOpts=q.o.filter(o=>/\d/.test(o)).length;
+ return hasCalcQ&&numOpts>=3;
+}
+function getCalcQuestions(cat, ch) {
+ const qs=[];
+ EXAMS[cat].forEach(exam=>exam.questions.forEach(q=>{if(q.c===ch&&isCalcQuestion(q))qs.push(q);}));
+ return qs;
+}
+function getAllCalcQuestions(cat) {
+ const qs=[];
+ EXAMS[cat].forEach(exam=>exam.questions.forEach(q=>{if(isCalcQuestion(q))qs.push(q);}));
+ return qs;
+}
 function shuffleArray(arr) {
  const a=[...arr]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a;
 }
@@ -2721,6 +2737,7 @@ function render() {
  case 'exams': renderExams(); break;
  case 'chapters': renderChapters(); break;
  case 'chapterCat': renderChapterCat(); break;
+ case 'calcCat': renderCalcCat(); break;
  case 'quiz': renderQuiz(); break;
  case 'result': renderResult(); break;
  case 'review': renderReview(); break;
@@ -2771,6 +2788,13 @@ function renderHome() {
  <div class="emoji">📚</div>
  <div class="title">${c.name} 챕터별</div>
  <div class="desc">과목별 랜덤 출제 · 20문제씩</div>
+ </div>`;}).join('')}
+ <div style="margin:20px 0 8px;font-size:14px;font-weight:600;color:var(--sub)">계산 문제 연습</div>
+ ${['bread','cake'].map(k=>{const c=CAT_INFO[k];const cnt=getAllCalcQuestions(k).length;return`
+ <div class="home-card" onclick="showCalcCat('${k}')" style="border-color:#F59E0B;border-width:1px">
+ <div class="emoji">🧮</div>
+ <div class="title">${c.name} 계산 문제</div>
+ <div class="desc">공식·계산 문제만 모아서 연습 · ${cnt}문제</div>
  </div>`;}).join('')}`;
 }
 
@@ -2812,6 +2836,50 @@ function renderChapterCat() {
  </div>
  </div>`;}).join('')}
  <div style="padding:12px;text-align:center;font-size:12px;color:var(--sub)">각 챕터에서 랜덤 20문제가 출제됩니다</div>`;
+}
+
+// ========== 계산 문제 ==========
+function showCalcCat(cat) { state.cat=cat; state.screen='calcCat'; render(); }
+function renderCalcCat() {
+ const c=CAT_INFO[state.cat];
+ const chKeys=['ingredients','manufacturing','nutrition','hygiene','management'];
+ const allCalc=getAllCalcQuestions(state.cat);
+ app.innerHTML = `
+ <div class="top-nav">
+ <button class="back-btn" onclick="state.screen='home';render()">←</button>
+ <div style="flex:1;text-align:center;font-weight:600;font-size:14px">🧮 ${c.name} 계산 문제</div>
+ </div>
+ <div class="home-card" onclick="startCalcQuiz('all')" style="border-color:#F59E0B;border-width:2px">
+ <div style="display:flex;align-items:center;gap:12px">
+ <div style="font-size:32px">🎯</div>
+ <div style="flex:1">
+ <div class="title">전체 계산 문제</div>
+ <div class="desc">모든 과목 랜덤 20문제</div>
+ <div class="desc" style="margin-top:4px;color:#F59E0B;font-weight:600">${allCalc.length}문제 보유</div>
+ </div>
+ </div>
+ </div>
+ ${chKeys.map(ch=>{const info=CH_INFO[ch],qs=getCalcQuestions(state.cat,ch);if(!qs.length)return'';return`
+ <div class="home-card" onclick="startCalcQuiz('${ch}')">
+ <div style="display:flex;align-items:center;gap:12px">
+ <div style="font-size:32px">${info.emoji}</div>
+ <div style="flex:1">
+ <div class="title">${info.name}</div>
+ <div class="desc">${info.desc}</div>
+ <div class="desc" style="margin-top:4px;color:#F59E0B;font-weight:600">계산 ${qs.length}문제</div>
+ </div>
+ </div>
+ </div>`;}).join('')}
+ <div style="padding:12px;text-align:center;font-size:12px;color:var(--sub)">각 과목에서 계산 문제만 랜덤 출제됩니다 (최대 20문제)</div>`;
+}
+function startCalcQuiz(ch) {
+ const cat=state.cat;
+ const allQs=ch==='all'?getAllCalcQuestions(cat):getCalcQuestions(cat,ch);
+ const selected=shuffleArray(allQs).slice(0,20);
+ if(!selected.length){alert('계산 문제가 없습니다.');return;}
+ const title=ch==='all'?'전체 계산 문제':CH_INFO[ch].name+' 계산';
+ state = { screen:'timerSelect', cat, idx:0, answers:new Array(selected.length).fill(-1), current:0, submitted:false, viewMode:'single', chapterExam:{title,desc:`계산 문제 · ${selected.length}문제`,questions:selected}, chapterMode:true, calcMode:true, chapter:ch, timerEnd:null };
+ showTimerSelect(true);
 }
 
 // ========== 타이머 ==========
@@ -2938,7 +3006,7 @@ function sel(qi,oi) { state.answers[qi]=oi; render(); }
 function prevQ() { if(state.current>0){state.current--;render();window.scrollTo(0,0);} }
 function nextQ() { if(state.current<getExam().questions.length-1){state.current++;render();window.scrollTo(0,0);} }
 function toggleView() { state.viewMode=state.viewMode==='single'?'all':'single'; render(); window.scrollTo(0,0); }
-function goBack() { if(state.answers.some(a=>a!==-1)&&!state.submitted){if(!confirm('시험을 종료하시겠습니까?'))return;} clearTimer(); state.screen=state.weakMode?'analytics':state.chapterMode?'chapterCat':'exams'; state.chapterExam=null; render(); }
+function goBack() { if(state.answers.some(a=>a!==-1)&&!state.submitted){if(!confirm('시험을 종료하시겠습니까?'))return;} clearTimer(); state.screen=state.weakMode?'analytics':state.calcMode?'calcCat':state.chapterMode?'chapterCat':'exams'; state.chapterExam=null; render(); }
 function submit() {
  const u=state.answers.filter(a=>a===-1).length;
  if(u>0&&!confirm(`아직 ${u}문제를 풀지 않았습니다.\n그래도 채점하시겠습니까?`))return;
@@ -2951,7 +3019,7 @@ function renderResult() {
  state.answers.forEach((a,i)=>{if(a===-1)skipped++;else if(a===exam.questions[i].a)correct++;else wrong++;});
  const score=Math.round((correct/total)*100), pass=score>=60;
  app.innerHTML = `
- <div class="top-nav"><button class="back-btn" onclick="state.screen='${state.weakMode?'analytics':state.chapterMode?'chapterCat':'exams'}';render()">←</button><div style="flex:1;text-align:center;font-weight:600;font-size:14px">채점 결과</div></div>
+ <div class="top-nav"><button class="back-btn" onclick="state.screen='${state.weakMode?'analytics':state.calcMode?'calcCat':state.chapterMode?'chapterCat':'exams'}';render()">←</button><div style="flex:1;text-align:center;font-weight:600;font-size:14px">채점 결과</div></div>
  <div class="result-card">
  <div style="font-size:15px;font-weight:600;margin-bottom:16px">${catName} ${exam.title}</div>
  <div class="score-circle ${pass?'pass':'fail'}">${score}<small>점</small></div>
@@ -2965,8 +3033,8 @@ function renderResult() {
  </div>
  <button class="btn btn-primary" onclick="showReview('wrong')">오답 확인하기</button>
  <button class="btn btn-outline" onclick="showReview('all')">전체 문제 확인</button>
- ${state.weakMode?`<button class="btn btn-outline" onclick="startWeakQuiz()">다시 풀기 (새 랜덤)</button>`:state.chapterMode?`<button class="btn btn-outline" onclick="startChapterQuiz('${state.chapter}')">다시 풀기 (새 랜덤)</button>`:`<button class="btn btn-outline" onclick="startExam(${state.idx})">다시 풀기</button>`}
- <button class="btn btn-outline" onclick="state.screen='${state.weakMode?'analytics':state.chapterMode?'chapterCat':'exams'}';render()">${state.weakMode?'학습 분석':state.chapterMode?'챕터 목록':'시험 목록'}</button>
+ ${state.weakMode?`<button class="btn btn-outline" onclick="startWeakQuiz()">다시 풀기 (새 랜덤)</button>`:state.calcMode?`<button class="btn btn-outline" onclick="startCalcQuiz('${state.chapter}')">다시 풀기 (새 랜덤)</button>`:state.chapterMode?`<button class="btn btn-outline" onclick="startChapterQuiz('${state.chapter}')">다시 풀기 (새 랜덤)</button>`:`<button class="btn btn-outline" onclick="startExam(${state.idx})">다시 풀기</button>`}
+ <button class="btn btn-outline" onclick="state.screen='${state.weakMode?'analytics':state.calcMode?'calcCat':state.chapterMode?'chapterCat':'exams'}';render()">${state.weakMode?'학습 분석':state.calcMode?'계산 문제':state.chapterMode?'챕터 목록':'시험 목록'}</button>
  <button class="btn btn-outline" onclick="state.screen='home';render()">홈으로</button>
  <div style="height:20px"></div>`;
 }
