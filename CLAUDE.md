@@ -16,6 +16,7 @@
 - 제빵기능사 모의고사 21개 시험 (원본 1회 + 2007~2011년 20회차, 각 60문제)
 - 제과기능사 모의고사 21개 시험 (원본 1회 + 2007~2011년 20회차, 각 60문제)
 - 총 2,520문제 (42개 시험 × 60문제), 전체 해설 포함
+- **해설 신뢰도**: r:99 comcbt 공식 해설(867건) + r:60~98 AI 해설(1,653건)
 - 정답/해설 3회 검증 완료 (~200건 수정, 원본 이미지 대조 포함)
 - 카테고리(제빵/제과) → 회차 선택 → 시험 UI 흐름
 - **챕터별 학습**: 5개 과목별 랜덤 20문제 출제
@@ -31,22 +32,26 @@
 ## 파일 구조
 ```
 baker-quiz/
-├── index.html          # 메인 앱 (HTML/CSS/JS 통합, 945KB, 2520문제+해설)
-├── data/               # 기출문제 원본 JSON (빌드용, 배포 불필요)
-├── originals/          # 원본 시험 문제 이미지 (20장)
-├── build-*.js          # 데이터 빌드 스크립트 (개발용)
-├── CLAUDE.md           # 이 파일
+├── index.html              # 메인 앱 (HTML/CSS/JS 통합, ~540KB, 2520문제+해설)
+├── data/                   # 기출문제 원본 JSON (빌드용, 배포 불필요)
+│   └── comcbt-explanations.json  # comcbt.com 크롤링 결과 (개발용)
+├── originals/              # 원본 시험 문제 이미지 (20장)
+├── build-*.js              # 데이터 빌드 스크립트 (개발용)
+├── crawl-comcbt.js         # comcbt.com 해설 크롤링 (개발용)
+├── update-explanations.js  # 해설 매칭/교체 스크립트 (개발용)
+├── CLAUDE.md               # 이 파일
 ├── .gitignore
 └── README.md
 ```
 
 ## 데이터 구조
 - 문제 데이터는 index.html 내 JavaScript 객체로 관리
-- 각 문제: `{q: 문제텍스트, o: [보기4개], a: 정답인덱스(0-3), e: 해설, c: 챕터}`
+- 각 문제: `{q: 문제텍스트, o: [보기4개], a: 정답인덱스(0-3), e: 해설, r: 신뢰도, c: 챕터}`
+- 신뢰도(r): 99=comcbt 공식 해설, 60~98=AI 생성 해설 (값이 높을수록 신뢰)
 - 챕터(c): ingredients, manufacturing, nutrition, hygiene, management
 - EXAMS 구조: `{bread: [{title, desc, questions}], cake: [{title, desc, questions}]}`
 - 시험 종류: `bread` (제빵기능사), `cake` (제과기능사)
-- 기출문제 출처: gunsys.com (2007~2011년)
+- 기출문제 출처: gunsys.com (2007~2011년), comcbt.com (공식 해설)
 
 ## LocalStorage 키
 - `baker-quiz-history`: 시험 단위 결과 기록 [{cat, idx, title, date, score, ...}]
