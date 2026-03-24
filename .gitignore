@@ -10,13 +10,3 @@ build-*.js
 PROMPT.md
 HANDOFF.md
 answer-sheet.md
-
-# Reference build artifacts
-scan-pages/
-extract-pdf.js
-build-reference.js
-data/ref-part*.json
-data/ref-data.js
-node_modules/
-package.json
-package-lock.json
