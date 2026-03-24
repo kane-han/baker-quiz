@@ -2662,6 +2662,16 @@ function renderHome() {
  </div>
  </div>`;
  })()}
+ <div style="margin:20px 0 8px;font-size:14px;font-weight:600;color:var(--sub)">핵심정리</div>
+ <div class="home-card" onclick="location.href='reference.html'" style="border-color:var(--accent,#8B5CF6);border-width:1px;background:#F5F3FF">
+ <div style="display:flex;align-items:center;gap:12px">
+ <div style="font-size:32px">📖</div>
+ <div style="flex:1">
+ <div class="title">핵심정리 160선</div>
+ <div class="desc">시험에 자주 나오는 핵심 요약 · 5개 챕터 · 검색 지원</div>
+ </div>
+ </div>
+ </div>
  <div style="margin:20px 0 8px;font-size:14px;font-weight:600;color:var(--sub)">챕터별 학습</div>
  ${['bread','cake'].map(k=>{const c=CAT_INFO[k];return`
  <div class="home-card" onclick="showChapterCat('${k}')" style="border-color:var(--primary);border-width:1px">
